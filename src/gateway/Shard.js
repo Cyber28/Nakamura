@@ -10,6 +10,7 @@ module.exports = class Shard extends EventEmitter {
         this._heartbeatAck = true
         this._sessionId = null
         this._ws = null
+        this._heartbeatInterval = null
 
         // many of these will probably be moved and handled and in a different file
         this.user = null
@@ -44,7 +45,7 @@ module.exports = class Shard extends EventEmitter {
                     break
                 case 10:
                     this.emit('debug', `hello receieved, starting heartbeating at ${msg.d.heartbeat_interval}ms`)
-                    setInterval(_ => { this.heartbeat() }, msg.d.heartbeat_interval)
+                    this._heartbeatInterval = setInterval(_ => { this.heartbeat() }, msg.d.heartbeat_interval)
                     this.identify()
                     break
                 case 11:
@@ -57,6 +58,7 @@ module.exports = class Shard extends EventEmitter {
         this._ws.on('close', (code, msg) => {
             this.emit('debug', `websocket closed\ncode: ${code}\nmessage: ${msg}`)
             this._ws = null
+            clearInterval(this._heartbeatInterval)
             this.connect()
         })
         this._ws.on('error', (err) => this.emit('debug', `oopsie doopsie websocket errorsie: ${err}`))
