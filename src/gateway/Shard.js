@@ -4,21 +4,22 @@ const erlpack = require('erlpack')
 const { GATEWAY_URL, GatewayOpcodes } = require('../Constants')
 
 module.exports = class Shard extends EventEmitter {
-    constructor(token) {
+    constructor(client) {
         super()
         this._seq = null
         this._heartbeatAck = true
         this._sessionId = null
         this._ws = null
         this._heartbeatInterval = null
-
-        // many of these will probably be moved and handled and in a different file
-        this.user = null
-        this.token = token
+        this.client = client
     }
 
     send(o) {
         this._ws.send(erlpack.pack(o))
+    }
+
+    emit(s, m) {
+        this.client.emit(s, m)
     }
 
     connect() {
@@ -36,7 +37,7 @@ module.exports = class Shard extends EventEmitter {
                     this.emit('debug', `dispatch event: ${msg.t}`)
                     switch (msg.t) {
                         case 'READY':
-                            this.user = msg.d.user
+                            this.client.user = msg.d.user
                             this._sessionId = msg.d.session_id
                             break
                         default:
@@ -80,7 +81,7 @@ module.exports = class Shard extends EventEmitter {
         this.send({
             op: GatewayOpcodes.RESUME,
             d: {
-                token: `Bot ${this.token}`,
+                token: `Bot ${this.client.token}`,
                 session_id: this._sessionId,
                 seq: this._seq
             }
@@ -92,7 +93,7 @@ module.exports = class Shard extends EventEmitter {
         this.send({
             op: GatewayOpcodes.IDENTIFY,
             d: {
-                token: `Bot ${this.token}`,
+                token: `Bot ${this.client.token}`,
                 properties: {
                     $os: "linux",
                     $browser: "Nakamura (Testing version)",
