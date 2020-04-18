@@ -1,7 +1,7 @@
 const EventEmitter = require('eventemitter3')
 const ws = require('ws')
 const erlpack = require('erlpack')
-const { GATEWAY_URL } = require('../Constants')
+const { GATEWAY_URL, GatewayOpcodes } = require('../Constants')
 
 module.exports = class Shard extends EventEmitter {
     constructor(token) {
@@ -32,7 +32,7 @@ module.exports = class Shard extends EventEmitter {
                 this.emit('debug', `new sequence number or something: ${this._seq}`)
             }
             switch (msg.op) {
-                case 0:
+                case GatewayOpcodes.DISPATCH:
                     this.emit('debug', `dispatch event: ${msg.t}`)
                     switch (msg.t) {
                         case 'READY':
@@ -43,12 +43,12 @@ module.exports = class Shard extends EventEmitter {
                             break
                     }
                     break
-                case 10:
+                case GatewayOpcodes.HELLO:
                     this.emit('debug', `hello receieved, starting heartbeating at ${msg.d.heartbeat_interval}ms`)
                     this._heartbeatInterval = setInterval(_ => { this.heartbeat() }, msg.d.heartbeat_interval)
                     this.identify()
                     break
-                case 11:
+                case GatewayOpcodes.HEARTBEAT_ACK:
                     this.emit('debug', 'heartbeat acked, nice')
                     this._heartbeatAck = true
                     break
@@ -70,7 +70,7 @@ module.exports = class Shard extends EventEmitter {
         }
         this.emit('debug', 'sent heartbeat')
         this.send({
-            op: 1,
+            op: GatewayOpcodes.HEARTBEAT,
             d: this._seq
         })
         this._heartbeatAck = false
@@ -78,7 +78,7 @@ module.exports = class Shard extends EventEmitter {
 
     resume() {
         this.send({
-            op: 6,
+            op: GatewayOpcodes.RESUME,
             d: {
                 token: `Bot ${this.token}`,
                 session_id: this._sessionId,
@@ -90,7 +90,7 @@ module.exports = class Shard extends EventEmitter {
     identify() {
         this.emit('debug', 'attempting to identify')
         this.send({
-            op: 2,
+            op: GatewayOpcodes.IDENTIFY,
             d: {
                 token: `Bot ${this.token}`,
                 properties: {
