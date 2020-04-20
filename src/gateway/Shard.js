@@ -36,23 +36,30 @@ module.exports = class Shard extends EventEmitter {
                 case GatewayOpcodes.DISPATCH:
                     this.emit('debug', `dispatch event: ${msg.t}`)
                     switch (msg.t) {
+                        // ok so this needs a LOT of development that i cba to do now
                         case 'READY':
                             this.client.user = msg.d.user
                             this._sessionId = msg.d.session_id
+                            // this one does not really belong here, will fix it later or something
+                            // this.emit('ready')
                             break
+
                         default:
                             break
                     }
                     break
+
                 case GatewayOpcodes.HELLO:
                     this.emit('debug', `hello receieved, starting heartbeating at ${msg.d.heartbeat_interval}ms`)
                     this._heartbeatInterval = setInterval(_ => { this.heartbeat() }, msg.d.heartbeat_interval)
                     this.identify()
                     break
+
                 case GatewayOpcodes.HEARTBEAT_ACK:
                     this.emit('debug', 'heartbeat acked, nice')
                     this._heartbeatAck = true
                     break
+
                 default: break
             }
         })

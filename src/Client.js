@@ -1,5 +1,6 @@
 const EventEmitter = require('eventemitter3')
 const Shard = require('./gateway/Shard')
+const Http = require('./rest/Http')
 
 module.exports = class Client extends EventEmitter {
     constructor(token) {
@@ -8,9 +9,26 @@ module.exports = class Client extends EventEmitter {
 
         this._shards = []
         this.user = null
+        this.http = new Http(this)
     }
 
     connect() {
         this._shards.push(new Shard(this).connect())
+    }
+
+    async createMessage(channel, content) {
+        console.log(`https://discordapp.com/api/v6/channels/${channel}/messages`)
+        const c = await this.http.send({
+            url: `https://discordapp.com/api/v6/channels/${channel}/messages`,
+            method: 'post',
+            data: {
+                content: content
+            },
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        console.log(c)
+        return c
     }
 }
