@@ -17,9 +17,8 @@ module.exports = class Client extends EventEmitter {
     }
 
     async createMessage(channel, content) {
-        console.log(`https://discordapp.com/api/v6/channels/${channel}/messages`)
         const c = await this.http.send({
-            url: `https://discordapp.com/api/v6/channels/${channel}/messages`,
+            url: `/channels/${channel}/messages`,
             method: 'post',
             data: {
                 content: content
@@ -28,7 +27,7 @@ module.exports = class Client extends EventEmitter {
                 'Content-Type': 'application/json'
             }
         })
-        console.log(c)
+        console.log(c.headers)
         return c
     }
 }
