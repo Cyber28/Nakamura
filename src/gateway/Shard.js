@@ -11,7 +11,9 @@ module.exports = class Shard extends EventEmitter {
         this._sessionId = null
         this._ws = null
         this._heartbeatInterval = null
+        this._unavailableGuilds = null
         this.client = client
+        this.guilds = new Map()
     }
 
     send(o) {
@@ -40,8 +42,30 @@ module.exports = class Shard extends EventEmitter {
                         case 'READY':
                             this.client.user = msg.d.user
                             this._sessionId = msg.d.session_id
-                            // this one does not really belong here, will fix it later or something
-                            // this.emit('ready')
+                            this._unavailableGuilds = new Set(msg.d.guilds.map(g => g.id))
+                            this.emit('ready', msg.d)
+                            break
+
+                        case 'GUILD_CREATE':
+                            if (this._unavailableGuilds.has(msg.d.id)) {
+                                this._unavailableGuilds.delete(msg.d.id)
+                                this.guilds.set(msg.d.id, {
+                                    id: msg.d.id,
+                                    name: msg.d.name,
+                                    memberCount: msg.d.member_count
+                                })
+                                if (this._unavailableGuilds.size == 0) {
+                                    this.emit('loaded')
+                                }
+                            }
+                            else {
+                                this.guilds.set(msg.d.id, {
+                                    id: msg.d.id,
+                                    name: msg.d.name,
+                                    memberCount: msg.d.member_count
+                                })
+                                this.emit('guildJoin', msg.d)
+                            }
                             break
 
                         default:
@@ -70,6 +94,8 @@ module.exports = class Shard extends EventEmitter {
             this.connect()
         })
         this._ws.on('error', (err) => this.emit('debug', `oopsie doopsie websocket errorsie: ${err}`))
+
+        return this //to add Shard object to Client._shards
     }
 
     heartbeat() {
