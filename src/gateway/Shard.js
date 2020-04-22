@@ -68,6 +68,10 @@ module.exports = class Shard extends EventEmitter {
                             }
                             break
 
+                        case 'MESSAGE_CREATE':
+                            this.emit('messageCreate', msg.d)
+                            break
+
                         default:
                             break
                     }
