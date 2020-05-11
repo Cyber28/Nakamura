@@ -4,6 +4,7 @@
   "author": "Cyber28",
   "license": "MIT",
   "main": "index.js",
+  "types": "index.d.ts",
   "dependencies": {
     "axios": "^0.19.2",
     "erlpack": "^0.1.3",
