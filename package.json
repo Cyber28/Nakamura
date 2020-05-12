@@ -11,5 +11,11 @@
     "eventemitter3": "^4.0.0",
     "ws": "^7.2.3",
     "zlib-sync": "^0.1.6"
+  },
+  "scripts": {
+    "doc": "jsdoc lib README.md -r -t node_modules/docdash --verbose"
+  },
+  "devDependencies": {
+    "docdash": "^1.2.0"
   }
 }
