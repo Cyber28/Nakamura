@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>gateway/Shard.js - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="Client.html">Client</a><ul class='methods'><li data-type='method'><a href="Client.html#addGuildMemberRole">addGuildMemberRole</a></li><li data-type='method'><a href="Client.html#connect">connect</a></li><li data-type='method'><a href="Client.html#createMessage">createMessage</a></li><li data-type='method'><a href="Client.html#getGatewayBot">getGatewayBot</a></li><li data-type='method'><a href="Client.html#getMessages">getMessages</a></li><li data-type='method'><a href="Client.html#leaveGuild">leaveGuild</a></li><li data-type='method'><a href="Client.html#removeGuildMemberRole">removeGuildMemberRole</a></li><li data-type='method'><a href="Client.html#setAllStatus">setAllStatus</a></li></ul></li><li><a href="Http.html">Http</a></li><li><a href="Shard.html">Shard</a><ul class='methods'><li data-type='method'><a href="Shard.html#connect">connect</a></li><li data-type='method'><a href="Shard.html#setStatus">setStatus</a></li></ul></li></ul><h3>Events</h3><ul><li><a href="Client.html#event:debug">debug</a></li><li><a href="Client.html#event:guildJoin">guildJoin</a></li><li><a href="Client.html#event:loaded">loaded</a></li><li><a href="Client.html#event:messageCreate">messageCreate</a></li><li><a href="Client.html#event:ready">ready</a></li></ul><h3><a href="global.html">Global</a></h3>
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">gateway/Shard.js</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>const EventEmitter = require('eventemitter3')
+const ws = require('ws')
+const erlpack = require('erlpack')
+const { GATEWAY_URL, GatewayOpcodes, unrecoverableCloseCodes } = require('../Constants')
+
+/**
+ * @typedef {Object} MinimalGuild
+ * @property {string} id - Id of the guild
+ * @property {string} name - Name of the guild
+ * @property {number} memberCount - Number of guild members
+ */
+/**
+ * The Shard class. Represents a Shard and WebSocket connection to Discord
+ * @extends {Eventemitter}
+ * @property {Client} client - The Client object this shard belongs to
+ * @property {Map&lt;string, MinimalGuild>} guilds - [MinimalGuild]{@link MinimalGuild} objects mapped by id
+ * @property {number} guildCount - Number of guilds the Shard has access to (does NOT include unavailable guilds)
+ */
+class Shard extends EventEmitter {
+    /**
+     * @constructor
+     * @param {Client} client - The Client object this Shard belongs to
+     */
+    constructor(client) {
+        super()
+
+        this._seq = null
+        this._heartbeatAck = true
+        this._sessionId = null
+        this._ws = null
+        this._heartbeatInterval = null
+        this._unavailableGuilds = null
+        this._reconnecting = false
+        this.client = client
+        this.guilds = new Map()
+        this.guildCount = 0
+    }
+
+    send(o) {
+        this._ws.send(erlpack.pack(o))
+    }
+
+    debug(m) {
+        /**
+         * internal debugging, you generally shouldn't listen to this
+         * @event Client#debug
+         * @prop {*} message
+         */
+        if (this.client.debug) this.emit('debug', m)
+    }
+
+    emit(s, m) {
+        this.client.emit(s, m)
+    }
+
+    /**
+     * Connects the shard to the Discord Gateway
+     */
+    connect() {
+        this._ws = new ws(`${GATEWAY_URL}?v6&amp;encoding=etf`)
+
+        this._ws.on('open', _ => { this.debug('Connection opened') })
+        this._ws.on('message', msg => {
+            msg = erlpack.unpack(msg)
+            if (msg.s) {
+                this._seq = msg.s
+                this.debug(`New sequence number: ${this._seq}`)
+            }
+            switch (msg.op) {
+                case GatewayOpcodes.DISPATCH:
+                    this.debug(`Dispatch: ${msg.t}`)
+                    switch (msg.t) {
+                        // ok so this needs a LOT of development that i cba to do now
+                        case 'READY':
+                            this.client.user = msg.d.user
+                            this._sessionId = msg.d.session_id
+                            this._unavailableGuilds = new Set(msg.d.guilds.map(g => g.id))
+                            /**
+                             * Emitted when the READY event is receieved
+                             * @event Client#ready
+                             * @prop {object} data - see [Ready event documentation]{@link https://discord.com/developers/docs/topics/gateway#ready}
+                             */
+                            this.emit('ready', msg.d)
+                            break
+
+                        case 'GUILD_CREATE':
+                            if (this._unavailableGuilds.has(msg.d.id)) {
+                                this._unavailableGuilds.delete(msg.d.id)
+                                this.guildCount++
+                                if (this.client.cache.guilds) {
+                                    this.guilds.set(msg.d.id, {
+                                        id: msg.d.id,
+                                        name: msg.d.name,
+                                        memberCount: msg.d.member_count
+                                    })
+                                }
+                                if (this._unavailableGuilds.size == 0) {
+                                    /**
+                                     * Emitted when all guilds are loaded
+                                     * @event Client#loaded
+                                     */
+                                    this.emit('loaded')
+                                }
+                            }
+                            else {
+                                this.guilds.set(msg.d.id, {
+                                    id: msg.d.id,
+                                    name: msg.d.name,
+                                    memberCount: msg.d.member_count
+                                })
+                                /**
+                                 * Emitted when the bot joins a guild
+                                 * @event Client#guildJoin
+                                 * @prop {object} guild - see [Guild Structure]{@link https://discord.com/developers/docs/resources/guild#guild-object-guild-structure}
+                                 */
+                                this.emit('guildJoin', msg.d)
+                            }
+                            break
+
+                        case 'MESSAGE_CREATE':
+                            /**
+                             * Emitted when a message is received
+                             * @event Client#messageCreate
+                             * @prop {object} message - see [Message Structure]{@link https://discord.com/developers/docs/resources/channel#message-object-message-structure}
+                             */
+                            this.emit('messageCreate', msg.d)
+                            break
+
+                        default:
+                            break
+                    }
+                    break
+
+                case GatewayOpcodes.HELLO:
+                    this.debug(`Hello receieved, starting to heartbeat at ${msg.d.heartbeat_interval}ms`)
+                    this._heartbeatInterval = setInterval(_ => { this.heartbeat() }, msg.d.heartbeat_interval)
+                    this._reconnecting ? this.resume() : this.identify()
+                    break
+
+                case GatewayOpcodes.HEARTBEAT_ACK:
+                    this.debug('Heartbeat acked')
+                    this._heartbeatAck = true
+                    break
+
+                default: break
+            }
+        })
+        this._ws.on('close', (code, msg) => {
+            this.debug(`\nWebsocket closed\ncode: ${code}\nmessage:${msg}\n`)
+            if (unrecoverableCloseCodes.includes(code)) {
+                console.log(`Unrecoverable error, closing! code: ${code} message: ${msg}`)
+                return setTimeout(process.exit, 300)
+            }
+            clearInterval(this._heartbeatInterval)
+            this._reconnecting = true
+            this.connect()
+        })
+        this._ws.on('error', (err) => this.debug(`oops, websocket error: ${err}`))
+
+        return this //to add Shard object to Client._shards
+    }
+
+    heartbeat() {
+        if (!this._heartbeatAck) {
+            this._ws.close()
+        }
+        this.debug('Sent heartbeat')
+        this.send({
+            op: GatewayOpcodes.HEARTBEAT,
+            d: this._seq
+        })
+        this._heartbeatAck = false
+    }
+
+    resume() {
+        this.send({
+            op: GatewayOpcodes.RESUME,
+            d: {
+                token: `Bot ${this.client.token}`,
+                session_id: this._sessionId,
+                seq: this._seq
+            }
+        })
+    }
+
+    identify() {
+        this.debug('Attempting to identify')
+        this.send({
+            op: GatewayOpcodes.IDENTIFY,
+            d: {
+                token: `Bot ${this.client.token}`,
+                properties: {
+                    $os: "linux",
+                    $browser: "Nakamura (Testing version)",
+                    $device: "Nakamura (Testing version)"
+                },
+                shard: [0, 1],
+                intents: 513
+            }
+        })
+    }
+
+    /**
+     * Set the status of the current shard
+     * @param {Object} data See [Status Update Structure]{@link https://discord.com/developers/docs/topics/gateway#update-status-gateway-status-update-structure}
+     */
+    // TODO: add more documentation for the data object
+    setStatus(o) {
+        this.debug('Changing status')
+        // dear future reader, if you are wondering
+        // why this was written in the way it was,
+        // let me introduce you to the magic of Object.assign
+        o.game = Object.assign({
+            name: '',
+            type: 0,
+            url: null
+        }, o.game)
+        this.send({
+            op: GatewayOpcodes.PRESENCE_UPDATE,
+            d: Object.assign({
+                since: null,
+                status: 'online',
+                afk: 'false' // what even is this for?
+            }, o)
+        })
+    }
+}
+
+module.exports.Shard = Shard</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 3.6.4</a> on Tue May 12 2020 18:49:48 GMT+0200 (Central European Summer Time) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>

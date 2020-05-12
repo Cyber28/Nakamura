@@ -13,7 +13,7 @@
     "zlib-sync": "^0.1.6"
   },
   "scripts": {
-    "doc": "jsdoc lib README.md -r -t node_modules/docdash --verbose"
+    "doc": "jsdoc lib README.md -r -t node_modules/docdash -d docs --verbose"
   },
   "devDependencies": {
     "docdash": "^1.2.0"
