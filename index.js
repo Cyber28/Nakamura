@@ -1,5 +1,5 @@
 module.exports = {
-    Client: require('./lib/Client'),
-    Constants: require('./lib/Constants'),
-    Shard: require('./lib/gateway/Shard')
+    Client: require('./lib/Client').Client,
+    Constants: require('./lib/Constants').Constants,
+    Shard: require('./lib/gateway/Shard').Shard
 }
