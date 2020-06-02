@@ -2,7 +2,7 @@
 ## lightweight and extensible Discord API wrapper
 Nakamura is a structureless*, "cache what you want" library. If you are interested in a version with more utility and features, check out the featured forks section.
 
-\* Nakamura doesn't provide classes for different data types (such as users, channels, messages, etc.), instead it let's you handle the data yourself.
+\*Nakamura doesn't provide classes for different data types (such as users, channels, messages, etc.), instead it let's you handle the data yourself.
 
 ### Featured forks
 
